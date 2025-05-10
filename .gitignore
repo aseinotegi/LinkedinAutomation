@@ -1,0 +1,12 @@
+# Entorno virtual de Python
+venv/
+__pycache__/
+
+# Archivo de variables de entorno
+.env
+
+# Otros archivos que podrías querer ignorar (opcional)
+*.pyc
+*.pyo
+*.pyd
+.DS_Store
