@@ -22,10 +22,11 @@ from openai import OpenAI
 from PIL import Image
 import tempfile
 import re
+import datetime
 
 # --- Load Environment Variables ---
 load_dotenv()
-
+    
 # --- Modified Function to Get Environment Variables for GUI/Streamlit ---
 def get_env_variable_st(var_name):
     """
@@ -45,9 +46,10 @@ class LinkedInAPIService:
     Progress/error messages can be printed to a passed console
     or could be refactored to return (success, message/data) tuples for pure GUI.
     """
-    def __init__(self, access_token, user_urn, api_version="202504", console_instance=None):
+    def __init__(self, access_token, user_urn, newsapi_key, api_version="202504", console_instance=None):
         self.access_token = access_token
         self.user_urn = user_urn
+        self.newsapi_key = newsapi_key
         self.api_version = api_version
         # If no console is passed (e.g., from a pure GUI), prints won't happen here.
         # For Streamlit, a console passed from LinkedInPostAutomation would print to Streamlit's terminal.
@@ -66,7 +68,94 @@ class LinkedInAPIService:
             except Exception: # Fallback if console object doesn't support Rich print
                 print(message)
 
+    def fetch_ai_news_from_newsapi(self,keywords='artificial intelligence', language='es',  sort_by='popularity', num_articles=10, days_ago=30):
+        """
+        Obtiene noticias sobre IA usando NewsAPI.
+        """
+        if not self.newsapi_key:
+            # Usar self._print_console si está disponible y configurado
+            message = "Advertencia: NEWSAPI_KEY no configurada para LinkedInAPIService."
+            if self.console and hasattr(self.console, 'print'):
+                self._print_console(message, style="bold orange")
+            else:
+                print(message)
+            return []
 
+        # Calcular la fecha 'desde' (from_date) usando el parámetro days_ago
+        try:
+            from_date = (datetime.date.today() - datetime.timedelta(days=days_ago)).strftime('%Y-%m-%d')
+        except Exception as e:
+            message = f"Error al calcular from_date: {e}"
+            if self.console and hasattr(self.console, 'print'):
+                self._print_console(message, style="bold red")
+            else:
+                print(message)
+            return []
+
+        # ... (resto de tu lógica para la URL)
+        
+        url = (f"https://newsapi.org/v2/everything?"
+               f"q={keywords}&"
+               f"from={from_date}&"
+               f"sortBy={sort_by}&"
+               f"language={language}&"
+               f"apiKey={self.newsapi_key}&"
+               f"pageSize={num_articles}")
+        
+        # Imprimir URL para depuración (opcional, puedes quitarlo después)
+        url_message = f"NewsAPI URL: {url}"
+        if self.console and hasattr(self.console, 'print'):
+            self._print_console(url_message, style="cyan")
+        else:
+            print(url_message)
+
+        try:
+            response = requests.get(url)
+            response.raise_for_status() 
+            
+            data = response.json()
+            
+            # Imprimir respuesta completa para depuración (opcional, puedes quitarlo después)
+            # data_message = f"NewsAPI Response Data: {data}"
+            # if self.console and hasattr(self.console, 'print'):
+            #     self._print_console(data_message, style="magenta")
+            # else:
+            #     print(data_message)
+
+            articles = data.get("articles", [])
+            
+            if not articles:
+                no_articles_message = f"No se encontraron artículos para: q='{keywords}', from='{from_date}', lang='{language}', sortBy='{sort_by}'."
+                if self.console and hasattr(self.console, 'print'):
+                    self._print_console(no_articles_message, style="yellow")
+                else:
+                    print(no_articles_message)
+
+            news_suggestions = []
+            for article in articles:
+                news_suggestions.append({
+                    "title": article.get("title"),
+                    "description": article.get("description"),
+                    "url": article.get("url"),
+                    "source": article.get("source", {}).get("name")
+                })
+            return news_suggestions
+        except requests.exceptions.HTTPError as http_err:
+            error_body = http_err.response.text if http_err.response else 'No response body'
+            http_error_message = f"Error HTTP al obtener noticias de NewsAPI: {http_err}. Response: {error_body}"
+            if self.console and hasattr(self.console, 'print'):
+                self._print_console(http_error_message, style="bold red")
+            else:
+                print(http_error_message)
+            return []
+        except Exception as e:
+            exception_message = f"Error inesperado en fetch_ai_news_from_newsapi: {e}"
+            if self.console and hasattr(self.console, 'print'):
+                self._print_console(exception_message, style="bold red")
+            else:
+                print(exception_message)
+            return []
+    
     def initialize_image_upload(self):
         """Step 1: Initializes the image upload to LinkedIn."""
         self._print_console("  Iniciando subida de imagen a LinkedIn...")
@@ -203,6 +292,7 @@ class LinkedInPostAutomation:
         linkedin_access_token = get_env_variable_st("LINKEDIN_ACCESS_TOKEN")
         linkedin_user_urn = get_env_variable_st("LINKEDIN_USER_URN")
         
+        self.newsapi_key_for_service = get_env_variable_st("NEWSAPI_KEY")
         # For Streamlit, you might pass None if you don't want API service logs in Streamlit's terminal,
         # or pass a Rich Console instance if you do want detailed API logs there.
         # from rich.console import Console # Import if using Rich Console here
@@ -212,9 +302,30 @@ class LinkedInPostAutomation:
         self.linkedin_service = LinkedInAPIService(
             access_token=linkedin_access_token,
             user_urn=linkedin_user_urn,
+            newsapi_key=self.newsapi_key_for_service,
             api_version=os.getenv("LINKEDIN_API_VERSION", "202504"), # Load from .env or default
             console_instance=self.console_for_api_service
         )
+        
+    def get_news_suggestions(self, keywords='artificial intelligence', language='es', sort_by='popularity', num_articles=10, days_ago=30):
+        """
+        Obtiene sugerencias de noticias llamando al método correspondiente en linkedin_service.
+        """
+        return self.linkedin_service.fetch_ai_news_from_newsapi(
+                        keywords=keywords,           
+                        language=language,         
+                        sort_by=sort_by,           
+                        num_articles=num_articles, 
+                        days_ago=days_ago          
+                    )
+        
+        # Este bloque solo se ejecutaría si self.linkedin_service no estuviera inicializado
+        # (lo cual no debería pasar si __init__ funciona bien)
+        if self.console_for_api_service and hasattr(self.console_for_api_service, 'print'):
+            self.console_for_api_service.print("Advertencia: LinkedInAPIService no está inicializado en LinkedInPostAutomation al llamar a get_news_suggestions.", style="bold orange")
+        else:
+            print("Advertencia: LinkedInAPIService no está inicializado en LinkedInPostAutomation al llamar a get_news_suggestions.")
+        return []
         
     def search_topic(self, topic, num_results=5):
         """Searches for relevant information on a topic using Google Search API."""
