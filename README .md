@@ -25,12 +25,8 @@ Sigue estos pasos para poner en marcha el proyecto:
 
 Abre tu terminal o consola, navega al directorio donde deseas guardar el proyecto y ejecuta:
 
-
-git clone <URL_DEL_REPOSITORIO_AQUI>
+git clone https://github.com/aseinotegi/LinkedinAutomation.git
 cd <NOMBRE_DEL_DIRECTORIO_DEL_PROYECTO>
-
-
-(Reemplaza `<URL_DEL_REPOSITORIO_AQUI>` y `<NOMBRE_DEL_DIRECTORIO_DEL_PROYECTO>` con los valores correctos). Si descargaste los archivos como un ZIP, descomprímelos y navega a la carpeta del proyecto en tu terminal.
 
 ### 2\. Crear y Activar un Entorno Virtual
 
